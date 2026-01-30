@@ -59,6 +59,7 @@ By combining these methods, the app accurately detects root access across both l
 <img src="https://github.com/user-attachments/assets/2f9465e7-b452-4b98-b873-894d931e7ccf" width="300px">
 </div>
 <br>
+
 ---
 
 ## ⚠️ IMPORTANT NOTICE ⚠️
