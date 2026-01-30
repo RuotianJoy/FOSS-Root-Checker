@@ -76,7 +76,7 @@ I am trying my best to report these people.
 
 - [Magisk by @topjohnwu](https://github.com/topjohnwu/Magisk) : For Rooting pretty much anything these days.
 - [KernelSU by @tiann](https://github.com/tiann/KernelSU) : For Kernel-Level Rooting on GKI Devices.
-- [APatch by @bmx121](https://github.com/bmax121/APatch) : For Easy Kernel-Level Rooting.
+- [APatch by @bmax121](https://github.com/bmax121/APatch) : For Easy Kernel-Level Rooting.
 - [mtkclient by @bkerler](https://github.com/bkerler/mtkclient) : For allowing MTK Devices to be Rooted Easily.
 
 ## Note from Developer :
