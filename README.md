@@ -15,7 +15,7 @@ App Version : `v1.0`
 
 Requirements : `Android Pie and Higher`
 
-Currently in Development. Releasing in March Q4! 🌟
+Currently in Development. Releasing in March! 🌟
 
 </div>
 
