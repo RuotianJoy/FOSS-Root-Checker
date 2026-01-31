@@ -14,7 +14,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:label="ROOT Checker"
+            android:label="Root Checker"
             android:theme="@style/Theme.FOSSRootChecker">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
