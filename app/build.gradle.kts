@@ -5,6 +5,12 @@ plugins {
 
 android {
     namespace = "foss.chillastro.su"
+
+    buildFeatures {
+        compose = true
+        buildConfig = true // Add this line to enable the version access
+    }
+
     compileSdk {
         version = release(36)
     }
@@ -54,4 +60,5 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+    implementation("androidx.compose.material:material-icons-extended")
 }

@@ -19,3 +19,15 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Keep the data classes for history persistence
+-keepclassmembers class ** {
+    @androidx.room.* *;
+}
+
+# Optimize Compose performance
+-keep class androidx.compose.runtime.** { *; }
+-dontwarn androidx.compose.runtime.**
+
+# Keep the build info for the Device Info card
+-keep class android.os.Build { *; }

@@ -2,47 +2,56 @@
 
 package foss.chillastro.su
 
+import android.content.Context
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.automirrored.rounded.*
+import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteType
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import androidx.core.content.edit
+import androidx.core.net.toUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.*
 import foss.chillastro.su.ui.theme.FOSSRootCheckerTheme
 
 class MainActivity : ComponentActivity() {
@@ -50,21 +59,18 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val systemTheme = isSystemInDarkTheme()
-            var isDarkMode by rememberSaveable { mutableStateOf(systemTheme) }
-            // NEW: Use Dynamic Color State (Material You)
-            var useDynamicColors by rememberSaveable { mutableStateOf(Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) }
+            val isSystemDark = isSystemInDarkTheme()
+            var manualDarkOverride by rememberSaveable { mutableStateOf<Boolean?>(null) }
+            var useDynamic by rememberSaveable { mutableStateOf(true) }
 
-            // Ensure the theme uses dynamic colors if enabled
-            FOSSRootCheckerTheme(
-                darkTheme = isDarkMode,
-                dynamicColor = useDynamicColors
-            ) {
-                FOSSRootCheckerApp(
-                    isDarkMode = isDarkMode,
-                    onThemeChange = { isDarkMode = it },
-                    useDynamicColors = useDynamicColors,
-                    onDynamicChange = { useDynamicColors = it }
+            val currentTheme = manualDarkOverride ?: isSystemDark
+
+            FOSSRootCheckerTheme(darkTheme = currentTheme, dynamicColor = useDynamic) {
+                FOSSRootApp(
+                    dark = currentTheme,
+                    onDark = { manualDarkOverride = it },
+                    dyn = useDynamic,
+                    onDyn = { useDynamic = it }
                 )
             }
         }
@@ -72,286 +78,360 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun FOSSRootCheckerApp(
-    isDarkMode: Boolean,
-    onThemeChange: (Boolean) -> Unit,
-    useDynamicColors: Boolean,
-    onDynamicChange: (Boolean) -> Unit
-) {
-    var currentDestination by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
+fun FOSSRootApp(dark: Boolean, onDark: (Boolean) -> Unit, dyn: Boolean, onDyn: (Boolean) -> Unit) {
+    var dest by rememberSaveable { mutableStateOf(AppDestinations.HOME) }
+    var showHistory by remember { mutableStateOf(false) }
+    val sheetState = rememberModalBottomSheetState()
+    val config = LocalConfiguration.current
 
-    BackHandler(enabled = currentDestination != AppDestinations.HOME) {
-        currentDestination = AppDestinations.HOME
-    }
+    val navType = if (config.screenWidthDp >= 600) NavigationSuiteType.NavigationRail else NavigationSuiteType.NavigationBar
+
+    BackHandler(dest != AppDestinations.HOME) { dest = AppDestinations.HOME }
 
     NavigationSuiteScaffold(
+        layoutType = navType,
         navigationSuiteItems = {
-            AppDestinations.entries.forEach { destination ->
+            AppDestinations.entries.forEach { item ->
                 item(
-                    icon = {
-                        when (val icon = destination.iconRes) {
-                            is ImageVector -> Icon(icon, contentDescription = null)
-                            is Int -> Icon(painterResource(id = icon), contentDescription = null)
-                        }
-                    },
-                    label = { Text(destination.label) },
-                    selected = destination == currentDestination,
-                    onClick = { currentDestination = destination }
+                    icon = { Icon(item.icon, null) },
+                    label = { Text(item.label) },
+                    selected = dest == item,
+                    onClick = { dest = item }
                 )
             }
         }
     ) {
-        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                AppHeader()
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Column(modifier = Modifier.widthIn(max = 600.dp).fillMaxHeight()) {
-                        when (currentDestination) {
-                            AppDestinations.HOME -> CheckerScreen()
-                            AppDestinations.GUIDE -> GuideScreen()
-                            AppDestinations.SETTINGS -> SettingsScreen(isDarkMode, onThemeChange, useDynamicColors, onDynamicChange)
+        Scaffold(
+            topBar = {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Text(
+                            text = buildAnnotatedString {
+                                append("ROOT CHECKER ")
+                                withStyle(SpanStyle(color = MaterialTheme.colorScheme.primary)) {
+                                    append("[ FOSS ]")
+                                }
+                            },
+                            fontWeight = FontWeight.ExtraBold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    },
+                    actions = {
+                        IconButton(onClick = { showHistory = true }) {
+                            Icon(Icons.Rounded.History, "History")
                         }
                     }
+                )
+            }
+        ) { padding ->
+            AnimatedContent(
+                targetState = dest,
+                modifier = Modifier.padding(padding),
+                transitionSpec = {
+                    val spec = spring<IntOffset>(stiffness = Spring.StiffnessLow)
+                    if (targetState.ordinal > initialState.ordinal) {
+                        slideInHorizontally(spec) { it } + fadeIn() togetherWith slideOutHorizontally(spec) { -it } + fadeOut()
+                    } else {
+                        slideInHorizontally(spec) { -it } + fadeIn() togetherWith slideOutHorizontally(spec) { it } + fadeOut()
+                    }
+                }, label = "PageTransition"
+            ) { target ->
+                when (target) {
+                    AppDestinations.HOME -> CheckerScreen()
+                    AppDestinations.GUIDE -> GuideScreen()
+                    AppDestinations.SETTINGS -> SettingsScreen(dark, onDark, dyn, onDyn)
                 }
+            }
+
+            if (showHistory) {
+                HistorySheet(onDismiss = { showHistory = false }, state = sheetState)
             }
         }
     }
-}
-
-@Composable
-fun AppHeader() {
-    CenterAlignedTopAppBar(
-        title = {
-            Text(
-                buildAnnotatedString {
-                    append("ROOT CHECKER ")
-                    withStyle(style = SpanStyle(
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.ExtraBold,
-                        fontFamily = FontFamily.Monospace
-                    )) {
-                        append("[ FOSS ]")
-                    }
-                },
-                style = MaterialTheme.typography.titleMedium,
-                letterSpacing = 2.sp
-            )
-        },
-        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent)
-    )
 }
 
 @Composable
 fun CheckerScreen() {
-    var checkState by remember { mutableIntStateOf(0) }
-    var isRooted by remember { mutableStateOf(false) }
+    var checkState by rememberSaveable { mutableIntStateOf(0) }
+    var isRooted by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+    val config = LocalConfiguration.current
 
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Top,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Card(
-            modifier = Modifier.padding(16.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
-            shape = RoundedCornerShape(16.dp)
+    val circleScale by animateFloatAsState(
+        targetValue = if (checkState == 1) 1.15f else 1f,
+        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessLow),
+        label = "CircleScale"
+    )
+
+    val containerColor by animateColorAsState(
+        targetValue = when(checkState) {
+            2 -> if (isRooted) Color(0xFF4CAF50) else Color(0xFFB00020) // Consistent across themes
+            else -> MaterialTheme.colorScheme.primaryContainer
+        },
+        animationSpec = tween(600),
+        label = "ColorTransition"
+    )
+
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            modifier = if (config.screenWidthDp >= 600) Modifier.fillMaxWidth(0.6f) else Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    text = "${Build.MANUFACTURER} ${Build.MODEL} | Android ${Build.VERSION.RELEASE}",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
-
-        Spacer(modifier = Modifier.weight(1f))
-
-        Box(contentAlignment = Alignment.Center) {
-            if (checkState == 1) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(240.dp),
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
-                    strokeWidth = 8.dp,
-                    strokeCap = StrokeCap.Round
-                )
+            Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.surfaceVariant.copy(0.5f)) {
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.Info, null, Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("${Build.MANUFACTURER} ${Build.MODEL} | Android ${Build.VERSION.RELEASE}", style = MaterialTheme.typography.labelLarge)
+                }
             }
 
-            Surface(
-                modifier = Modifier.size(180.dp),
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer,
-                tonalElevation = 6.dp
-            ) {
-                Icon(
-                    painter = painterResource(id = R.drawable.root_hash),
-                    contentDescription = null,
-                    modifier = Modifier.padding(45.dp),
-                    tint = when {
-                        checkState == 2 && isRooted -> Color(0xFF4CAF50)
-                        checkState == 2 -> MaterialTheme.colorScheme.error
-                        else -> MaterialTheme.colorScheme.onPrimaryContainer
-                    }
-                )
-            }
-        }
+            Spacer(Modifier.height(64.dp))
 
-        Spacer(modifier = Modifier.height(32.dp))
+            Box(contentAlignment = Alignment.Center) {
+                if (checkState == 1) CircularProgressIndicator(Modifier.size(240.dp), strokeWidth = 6.dp, strokeCap = androidx.compose.ui.graphics.StrokeCap.Round)
 
-        Text(
-            text = when(checkState) {
-                1 -> "Interrogating Binary..."
-                2 -> if (isRooted) "DEVICE IS ROOTED" else "ACCESS DENIED"
-                else -> "Ready to scan"
-            },
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Black,
-            color = if (checkState == 2 && isRooted) Color(0xFF4CAF50) else MaterialTheme.colorScheme.onBackground
-        )
-
-        Spacer(modifier = Modifier.height(32.dp))
-
-        Button(
-            onClick = {
-                checkState = 1
-                scope.launch(Dispatchers.IO) {
-                    delay(1200)
-                    val result = checkSuBinary()
-                    withContext(Dispatchers.Main) {
-                        isRooted = result
-                        checkState = 2
+                Surface(
+                    Modifier.size(180.dp).graphicsLayer(scaleX = circleScale, scaleY = circleScale),
+                    shape = CircleShape, color = containerColor, tonalElevation = 8.dp
+                ) {
+                    Crossfade(checkState, label = "IconCrossfade") { s ->
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            when(s) {
+                                2 -> Icon(
+                                    imageVector = if (isRooted) Icons.Rounded.Check else Icons.Rounded.Close,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(72.dp),
+                                    tint = Color.White
+                                )
+                                else -> Icon(
+                                    painterResource(R.drawable.root_hash),
+                                    null,
+                                    Modifier.size(80.dp),
+                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
                     }
                 }
-            },
-            modifier = Modifier.height(56.dp).width(220.dp),
-            shape = RoundedCornerShape(12.dp),
-            enabled = checkState != 1
-        ) {
-            Text("SCAN SYSTEM", letterSpacing = 1.sp, fontWeight = FontWeight.Bold)
-        }
+            }
 
-        Spacer(modifier = Modifier.weight(1.2f))
+            Text(
+                text = when(checkState) {
+                    1 -> "Interrogating SU Binaries..."
+                    2 -> if (isRooted) "Your Device is Rooted" else "Root Access not Available"
+                    else -> "Ready to verify?"
+                },
+                modifier = Modifier.padding(top = 32.dp), style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold
+            )
+
+            Spacer(Modifier.height(48.dp))
+
+            Button(
+                onClick = {
+                    checkState = 1
+                    scope.launch(Dispatchers.IO) {
+                        delay(1500)
+                        val result = checkRoot()
+                        withContext(Dispatchers.Main) {
+                            isRooted = result
+                            checkState = 2
+                            saveLog(context, result)
+                        }
+                    }
+                },
+                modifier = Modifier.height(64.dp).fillMaxWidth(0.7f),
+                shape = RoundedCornerShape(32.dp),
+                enabled = checkState != 1
+            ) {
+                Text("Verify ROOT")
+            }
+        }
     }
 }
 
 @Composable
 fun GuideScreen() {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Text("SAFE ROOTING METHODS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-
-        GuideCard("Magisk", "Systemless root patching your boot image. Compatible with most Android 5.0+ devices.", MaterialTheme.colorScheme.primaryContainer)
-        GuideCard("KernelSU", "Root at the kernel level. Stealthy, efficient, and bypasses many app detections.", MaterialTheme.colorScheme.secondaryContainer)
-        GuideCard("APatch", "Modern alternative that patches the kernel without requiring GKI support.", MaterialTheme.colorScheme.tertiaryContainer)
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-
-        // WARNING SECTION
+    Column(Modifier.padding(16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Card(
             modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+            colors = CardDefaults.cardColors(MaterialTheme.colorScheme.errorContainer), // Theme-aware red
+            shape = RoundedCornerShape(24.dp)
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                    Spacer(Modifier.width(8.dp))
-                    Text("CRITICAL WARNINGS", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
+            Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Warning, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(32.dp))
+                Spacer(Modifier.width(16.dp))
+                Column {
+                    Text("SECURITY WARNING", fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
+                    Text("Never trust 'One-Click Root' apps. Only use official open-source binaries like Magisk or KernelSU to avoid malware.", style = MaterialTheme.typography.bodySmall)
                 }
-                Spacer(Modifier.height(8.dp))
-                Text("• NEVER use 'One-Click Root' apps like KingRoot or KingoRoot. They often contain spyware and use unpatched vulnerabilities.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
-                Spacer(Modifier.height(4.dp))
-                Text("• Avoid unauthorized sources. Only download binaries from official GitHub repositories of Magisk, KernelSU, or APatch.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+            }
+        }
+
+        Text("INSTRUCTIONS", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        GuideCard("1. Developer Options", "Enable 'OEM Unlocking' and 'USB Debugging' in your device settings.", Icons.Rounded.Settings)
+        GuideCard("2. Unlock Bootloader", "Run 'fastboot flashing unlock' or 'fastboot oem unlock' via PC.", Icons.Rounded.LockOpen)
+        GuideCard("3. Flash Root", "Patch your boot image via Magisk App and flash it via fastboot.", Icons.Rounded.FlashOn)
+
+        Text("TRUSTED SOURCES", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        LinkCard("Magisk", "https://github.com/topjohnwu/Magisk")
+        LinkCard("KernelSU", "https://github.com/tiann/KernelSU")
+        LinkCard("APatch", "https://github.com/bmax121/APatch")
+    }
+}
+
+@Composable
+fun GuideCard(t: String, d: String, i: ImageVector) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp)) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(i, null, tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(16.dp))
+            Column {
+                Text(t, fontWeight = FontWeight.Bold)
+                Text(d, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }
 }
 
 @Composable
-fun GuideCard(title: String, desc: String, color: Color) {
-    Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = color)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Text(desc, style = MaterialTheme.typography.bodyMedium)
-        }
-    }
-}
+fun SettingsScreen(dark: Boolean, onDark: (Boolean) -> Unit, dyn: Boolean, onDyn: (Boolean) -> Unit) {
+    val ctx = LocalContext.current
+    val appVersion = BuildConfig.VERSION_NAME
 
-@Composable
-fun SettingsScreen(
-    isDarkMode: Boolean,
-    onThemeChange: (Boolean) -> Unit,
-    useDynamicColors: Boolean,
-    onDynamicChange: (Boolean) -> Unit
-) {
-    val context = LocalContext.current
-    Column(modifier = Modifier.fillMaxSize().padding(16.dp).verticalScroll(rememberScrollState())) {
-        Text("PREFERENCES", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-        ListItem(
-            headlineContent = { Text("Dark Theme") },
-            trailingContent = { Switch(checked = isDarkMode, onCheckedChange = onThemeChange) }
-        )
-        // NEW: Dynamic Color Toggle (only shows on Android 12+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+    Column(Modifier.fillMaxSize().padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Icon(painterResource(R.drawable.root_hash), null, Modifier.size(80.dp), MaterialTheme.colorScheme.primary)
+
+        Row(Modifier.padding(top = 12.dp)) {
+            Text("Developer: ", fontWeight = FontWeight.ExtraBold)
+            Text("Chill-Astro Software", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+        }
+
+        Row(Modifier.padding(top = 4.dp)) {
+            Text("Version: ", fontWeight = FontWeight.ExtraBold)
+            Text(appVersion, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
+        }
+
+        TextButton(
+            modifier = Modifier.padding(top = 8.dp),
+            onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, "https://github.com/Chill-Astro/FOSS-Root-Checker".toUri())) }
+        ) {
+            Icon(Icons.Rounded.Code, null, Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("GitHub Repo")
+        }
+
+        HorizontalDivider(Modifier.padding(vertical = 24.dp))
+
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("PREFERENCES", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
             ListItem(
-                headlineContent = { Text("Use System Colors") },
-                supportingContent = { Text("Match app colors with your wallpaper") },
-                trailingContent = { Switch(checked = useDynamicColors, onCheckedChange = onDynamicChange) }
+                headlineContent = { Text("App Theme") },
+                leadingContent = { Icon(Icons.Rounded.Brush, null) },
+                trailingContent = { Switch(checked = dark, onCheckedChange = { onDark(it) }) }
             )
-        }
-
-        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-
-        Text("ABOUT DEVELOPER", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text("Developer: Chill-Astro", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(4.dp))
-
-                val annotatedLink = buildAnnotatedString {
-                    append("Visit the Project: ")
-                    pushStringAnnotation(tag = "URL", annotation = "https://github.com/chill-astro/FOSS-Root-Checker")
-                    withStyle(style = SpanStyle(color = MaterialTheme.colorScheme.primary, textDecoration = TextDecoration.Underline)) {
-                        append("GitHub Repository")
-                    }
-                    pop()
-                }
-
-                ClickableText(
-                    text = annotatedLink,
-                    style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant),
-                    onClick = { offset ->
-                        annotatedLink.getStringAnnotations("URL", offset, offset).firstOrNull()?.let { annotation ->
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(annotation.item))
-                            context.startActivity(intent)
-                        }
-                    }
+            if (Build.VERSION.SDK_INT >= 31) {
+                ListItem(
+                    headlineContent = { Text("System Colours") },
+                    leadingContent = { Icon(Icons.Rounded.Palette, null) },
+                    trailingContent = { Switch(dyn, onDyn) }
                 )
             }
         }
+        Spacer(Modifier.weight(1f))
+        Text("FOSS ROOT CHECKER", modifier = Modifier.alpha(0.4f), style = MaterialTheme.typography.labelSmall)
     }
 }
 
-enum class AppDestinations(val label: String, val iconRes: Any) {
-    HOME("Checker", R.drawable.root_hash),
-    GUIDE("Guide", R.drawable.root_guide),
-    SETTINGS("Settings", Icons.Default.Settings)
-}
-
-fun checkSuBinary(): Boolean {
-    return try {
-        val process = Runtime.getRuntime().exec(arrayOf("su", "-c", "id"))
-        val output = process.inputStream.bufferedReader().readLine()
-        output != null && output.contains("uid=0")
-    } catch (_: Exception) {
-        val paths = arrayOf("/system/xbin/su", "/system/bin/su", "/sbin/su", "/data/local/xbin/su", "/su/bin/su")
-        paths.any { java.io.File(it).exists() }
+@Composable
+fun HistorySheet(onDismiss: () -> Unit, state: SheetState) {
+    val context = LocalContext.current
+    var logs by remember { mutableStateOf(getLogs(context)) }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = state, shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp).navigationBarsPadding()) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.History, null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(12.dp))
+                    Text("History", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold)
+                }
+                if (logs.isNotEmpty()) {
+                    FilledTonalButton(
+                        onClick = { clearLogs(context); logs = emptyList() },
+                        colors = ButtonDefaults.filledTonalButtonColors(MaterialTheme.colorScheme.errorContainer, MaterialTheme.colorScheme.error)
+                    ) {
+                        Icon(Icons.Rounded.DeleteForever, null, Modifier.size(20.dp))
+                        Text(" Clear")
+                    }
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+            if (logs.isEmpty()) {
+                Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
+                    Text("Clean Slate", modifier = Modifier.alpha(0.4f))
+                }
+            } else {
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(bottom = 32.dp)) {
+                    items(logs) { log ->
+                        val p = log.split("|")
+                        if (p.size >= 5) HistoryItem(p[0] == "OK", p[1], p[2], p[3], p[4])
+                    }
+                }
+            }
+        }
     }
 }
+
+@Composable
+fun HistoryItem(ok: Boolean, time: String, model: String, ver: String, id: String) {
+    Card(Modifier.fillMaxWidth(), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(MaterialTheme.colorScheme.surfaceVariant.copy(0.3f))) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Surface(Modifier.size(40.dp), shape = CircleShape, color = if (ok) Color(0xFF4CAF50) else Color(0xFFB00020)) {
+                Icon(if (ok) Icons.Rounded.Check else Icons.Rounded.Close, null, Modifier.padding(8.dp), Color.White)
+            }
+            Spacer(Modifier.width(16.dp))
+            Column {
+                Text(if (ok) "Root Verified" else "Root Not Found", fontWeight = FontWeight.Bold)
+                Text("$time • $model (Android $ver)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            }
+        }
+    }
+}
+
+@Composable
+fun LinkCard(t: String, url: String) {
+    val ctx = LocalContext.current
+    OutlinedCard(onClick = { ctx.startActivity(Intent(Intent.ACTION_VIEW, url.toUri())) }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) {
+        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(t, Modifier.weight(1f), fontWeight = FontWeight.Bold)
+            Icon(Icons.AutoMirrored.Rounded.OpenInNew, null, Modifier.size(18.dp))
+        }
+    }
+}
+
+enum class AppDestinations(val label: String, val icon: ImageVector) {
+    HOME("Checker", Icons.Rounded.Tag),
+    GUIDE("Guide", Icons.AutoMirrored.Rounded.MenuBook),
+    SETTINGS("Settings", Icons.Rounded.Settings)
+}
+
+fun checkRoot(): Boolean = try {
+    Runtime.getRuntime().exec(arrayOf("su", "-c", "id")).inputStream.bufferedReader().readLine()?.contains("uid=0") == true
+} catch (_: Exception) {
+    arrayOf("/system/xbin/su", "/system/bin/su", "/sbin/su").any { java.io.File(it).exists() }
+}
+
+fun saveLog(c: Context, r: Boolean) {
+    val p = c.getSharedPreferences("su_logs", Context.MODE_PRIVATE)
+    val t = SimpleDateFormat("MMM dd, HH:mm", Locale.getDefault()).format(Date())
+    val entry = "${if (r) "OK" else "NO"}|$t|${Build.MODEL}|${Build.VERSION.RELEASE}|${Build.ID}"
+    val set = p.getStringSet("logs", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
+    set.add("${System.currentTimeMillis()}_$entry")
+    p.edit { putStringSet("logs", set) }
+}
+
+fun getLogs(c: Context): List<String> = c.getSharedPreferences("su_logs", Context.MODE_PRIVATE)
+    .getStringSet("logs", emptySet())?.toList()?.sortedByDescending { it.substringBefore("_") }?.map { it.substringAfter("_") } ?: emptyList()
+
+fun clearLogs(c: Context) = c.getSharedPreferences("su_logs", Context.MODE_PRIVATE).edit { remove("logs") }
