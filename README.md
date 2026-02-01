@@ -17,6 +17,8 @@ Requirements : `Android Pie and Higher`
 
 Currently in Development. Releasing in March! 🌟
 
+To be Released on Amazon App Store, UptoDown Store, APKPure and FDroid.
+
 </div>
 
 ---
